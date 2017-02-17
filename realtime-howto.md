@@ -1,3 +1,9 @@
+# WAIT!!
+
+Stop right now and watch this video: [Introduction to Realtime Linux](https://www.youtube.com/watch?v=BKkX9WASfpI).
+
+Once you did, continue reading...
+
 # Introduction
 
 In terms of real-time linux, you might now that the two most common options
@@ -47,8 +53,6 @@ Install required packages
     sudo apt-get install kernel-package fakeroot build-essential libncurses5-dev \
                           wget bzip2 xz-utils libssl-dev bc git libqt4-dev pkg-config
 
-
-
 Get sources. Chose a kernel number and a [RT Patch here](https://www.kernel.org/pub/linux/kernel/projects/rt/).
 For example:
 
@@ -74,18 +78,62 @@ Be sure also that **High Resolution Timer** is enabled.
 To build the kernel:
 
     make-kpkg clean
-    fakeroot make-kpkg --initrd --revision 0 kernel_image kernel_headers -j8
+    fakeroot make-kpkg --initrd --append-to-version=-patched kernel-image kernel-headers -j $(getconf _NPROCESSORS_ONLN)
     
 If you get any error at the end pf the process (during the creation of the debian files), you might want
  to follow [these instructions](https://bugs.launchpad.net/ubuntu/+source/kernel-package/+bug/1308183).
  
  In short, you should install 
  
- [https://launchpad.net/ubuntu/+source/kernel-package/13.003/+build/5980712/+files/kernel-package_13.003_all.deb](https://launchpad.net/ubuntu/+source/kernel-package/13.003/+build/5980712/+files/kernel-package_13.003_all.deb)
+ [kernel-package_13.003_all.deb](https://launchpad.net/ubuntu/+source/kernel-package/13.003/+build/5980712/+files/kernel-package_13.003_all.deb)
 
 
 Finally, you can install the kernel using the commands:
 
     sudo dpkg -i ../linux-{headers,image}-4.4.47-rt59*.deb
 
+## First steps and Hello World
+
+A good way to start understanding how to write a real-time process/thread is to real this
+[example](https://rt.wiki.kernel.org/index.php/RT_PREEMPT_HOWTO#A_Realtime_.22Hello_World.22_Example)
+
+I also suggest to read the source code of [Cyclictest](https://rt.wiki.kernel.org/index.php/Cyclictest).
+
+## Tip and tricks
+
+1. Remember that context switching is a relatively slow operation. Don't use multiple threads if you can serialize
+your operations on a single one.
+
+* You assign RT priority to __threads__ not processes. This means that in a single process
+normal and RT threads can coexist.
+
+* RT threads shall __not allocate dynamic memory__, if not during the initialization. 
+
+   * If you really need to use dynamic data structure, consider the use of a memory pool.
+   * Prefer data structures like std::vector and boost::circular_buffer.
+   * std::string allocates memory. So does std::iostream.
+   * Use **Valgrind** or other tools such as **MemTrack** or **libcwd** to check that you are not allocating memory.
+   
+* Avoid algorithm that use iterative algorithms that are not time bounded. An example? Inverse-kinematic
+ using the pseudo inverse of a jacobian.
+ 
+   * If you use them, always use a timeout to be sure that you won't use too much time budget.
+   
+* Optional: learn the main principles of **cache friendly programming**.
+
+* There are stacks of the OS that are inerently not RT, like USB. In theory even the Ethernet
+task is not, but you will get good determinism if you **avoid using a switch or router**.
+
+
+* Whenever your application need to do non-deterministic and non-RT tasks, "delegate" the action to another
+non-RT thread. Take a look to the "asynchronous execution" design patters.
+
+* The best inter-thread communication are circular buffers (protected by mutexes) or the 
+data structures in [boost::lockfree](http://www.boost.org/doc/libs/1_63_0/doc/html/lockfree.html).
+
+   * In general, even if mutexes *should* be safe on a RT-OS (take few minutes to read about "priority inversion"),
+    prefer lockfree data structures if you can.
+    
+   
+   
 
